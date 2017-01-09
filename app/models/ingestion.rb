@@ -1,13 +1,9 @@
-# ingestion modeled in PREMIS RDF
-# References:
-# 	Archivematica PREMIS events: https://wiki.archivematica.org/PREMIS_metadata:_events#Fixity_check
-# 	Carolina Digital Repository PREMIS Events Datastream Example: 		http://blogs.lib.unc.edu/cdr/index.php/about/cdr-development-and-collab/technical-documentation/metadata/premis/premis-events-datastream-example/
-# 	Fedora 4 Design: PREMIS event service: https://wiki.duraspace.org/display/FF/Design+-+PREMIS+Event+Service
+# Ingestion event modeled in PREMIS RDF
 
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @preifx premis: <http://www.loc.gov/premis/rdf/v1#> .
 @prefix local: <http://fedoraInstance:8080/rest/> .
-@prefix hydradam2: <http://url/for/hydradam2>
+# @prefix hydradam2: <http://url/for/hydradam2>
 
 # not sure how this can be connected to an object in Fedora but might need something like following statement:
 # <local:Object/BinaryFile> <premis:hasEvent> <local:Object/premis/event2> .
@@ -28,4 +24,4 @@
     # <hydradam2:adminUser>
     <premis:hasAgent> <hydradam2:HeidiDowding> .
     
-# This event is coming out very similarly to the fixity check event and seems to really flow with the Fedora PREMIS event service design. Is anything else necessary to know about an ingestion event? premis:hasEventOutcomeInformation might not even be useful here since if ingestion fails, there is no event to record, right?
+
