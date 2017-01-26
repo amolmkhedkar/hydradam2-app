@@ -26,6 +26,9 @@ module HydraDAM
           @source_metadata = nil
           @file_sets = []
           @sources = []
+          @md5sums_map = {}
+          @md5events_map = {}
+          @purls_map = {}
 
           filenames.each { |filename| process_file(filename) }
           postprocess
@@ -63,13 +66,13 @@ module HydraDAM
             if file_reader.type.in? [:pod, :mods, :mdpi]
               @work_attributes[file_reader.type] = work_ai.raw_attributes
               @file_set_attributes[file_reader.type] = file_set_ai.raw_attributes
-              # FIXME: check with Julie, Heidi about which set "wins"
-              # @md5sums_map = file_reader.reader.md5sums_map if file_reader.type == :mdpi
+              # MDPI value "wins" over manifest value
+              @md5sums_map.merge!(file_reader.reader.md5sums_map) if file_reader.type == :mdpi
               @md5events_map = array_merge(@md5events_map, file_reader.reader.md5events_map) if file_reader.type == :mdpi
               file_set[:files] = file_reader.files
             elsif file_reader.type.in? [:purl, :md5]
               @purls_map = file_reader.reader.purls_map if file_reader.type == :purl
-              @md5sums_map = file_reader.reader.md5sums_map if file_reader.type == :md5
+              @md5sums_map = file_reader.reader.md5sums_map.merge(@md5sums_map) if file_reader.type == :md5
               @md5events_map = array_merge(@md5events_map, file_reader.reader.md5events_map) if file_reader.type == :md5
               file_set[:files] = file_reader.files
             else
@@ -81,18 +84,6 @@ module HydraDAM
           @file_sets << file_set if file_set.present?
         end
     
-        def md5sums_map
-          @md5sums_map ||= {}
-        end
-
-        def md5events_map
-          @md5events_map ||= {}
-        end
-
-        def purls_map
-          @purls_map ||= {}
-        end
-
         def array_merge(h1, h2)
           h = {}
           h1 ||= {}
@@ -109,8 +100,8 @@ module HydraDAM
             if file_set[:files].present?
               file_set[:files].each do |file|
                 if file[:filename]
-                  file[:md5sum] = md5sums_map[file[:filename]] if md5sums_map[file[:filename]]
-                  file[:purl] = purls_map[file[:filename]] if purls_map[file[:filename]]
+                  file[:md5sum] = @md5sums_map[file[:filename]] if @md5sums_map[file[:filename]]
+                  file[:purl] = @purls_map[file[:filename]] if @purls_map[file[:filename]]
                 end
               end
               # FIXME: media file wins, if available?
