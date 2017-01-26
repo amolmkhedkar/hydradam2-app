@@ -160,7 +160,8 @@ module HydraDAM
   
         def parse
         end
-  # for Work metadata
+
+        # for Work metadata
         def attributes
           {}
         end
