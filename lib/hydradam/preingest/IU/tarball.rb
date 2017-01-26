@@ -63,11 +63,14 @@ module HydraDAM
             if file_reader.type.in? [:pod, :mods, :mdpi]
               @work_attributes[file_reader.type] = work_ai.raw_attributes
               @file_set_attributes[file_reader.type] = file_set_ai.raw_attributes
+              # FIXME: check with Julie, Heidi about which set "wins"
+              # @md5sums_map = file_reader.reader.md5sums_map if file_reader.type == :mdpi
+              @md5events_map = array_merge(@md5events_map, file_reader.reader.md5events_map) if file_reader.type == :mdpi
               file_set[:files] = file_reader.files
             elsif file_reader.type.in? [:purl, :md5]
               @purls_map = file_reader.reader.purls_map if file_reader.type == :purl
               @md5sums_map = file_reader.reader.md5sums_map if file_reader.type == :md5
-              @md5events_map = file_reader.reader.md5events_map if file_reader.type == :md5
+              @md5events_map = array_merge(@md5events_map, file_reader.reader.md5events_map) if file_reader.type == :md5
               file_set[:files] = file_reader.files
             else
               file_set[:attributes] = file_set_ai.raw_attributes
@@ -82,16 +85,27 @@ module HydraDAM
           @md5sums_map ||= {}
         end
 
+        def md5events_map
+          @md5events_map ||= {}
+        end
+
         def purls_map
           @purls_map ||= {}
+        end
+
+        def array_merge(h1, h2)
+          h = {}
+          h1 ||= {}
+          h2 ||= {}
+          keys = h1.keys.sort | h2.keys.sort
+          keys.each do |k|
+            h[k] = Array.wrap(h1[k]) + Array.wrap(h2[k])
+          end
+          h
         end
   
         def postprocess
           @file_sets.each do |file_set|
-            if @md5events_map && @md5events_map[file_set[:filename]]
-              file_set[:events] ||= []
-              file_set[:events] << @md5events_map[file_set[:filename]]
-            end
             if file_set[:files].present?
               file_set[:files].each do |file|
                 if file[:filename]
@@ -103,6 +117,10 @@ module HydraDAM
               file_set[:filename] = file_set[:files].last[:filename]
               # FIXME: this bypasses attribute ingester...
               file_set[:attributes][:md5_checksum] = Array.wrap(file_set[:files].last[:md5sum]) if file_set[:attributes].present?
+            end
+            if @md5events_map && @md5events_map[file_set[:filename]]
+              file_set[:events] ||= []
+              file_set[:events] += @md5events_map[file_set[:filename]]
             end
           end
         end
@@ -204,6 +222,20 @@ module HydraDAM
 
         def events
         end
+
+        def md5sums_map_to_events(mapping, agent: 'mailto@mdpi.iu.edu')
+          foo = {}
+          mapping.each do |filename, checksum|
+            digest_atts = {}
+            digest_atts[:premis_event_type] = ['mes']
+            digest_atts[:premis_agent] = [agent] #FIXME: vary
+            digest_atts[:premis_event_date_time] = Array.wrap(File.mtime(id))
+            digest_atts[:premis_event_detail] = ['Program used: python, hashlib.sha256()'] #FIXME: vary
+            digest_atts[:premis_event_outcome] = [checksum]
+            foo[filename] = { attributes: digest_atts }
+          end
+          foo
+        end
       end
       class XmlReader < AbstractReader
         def initialize(id, source)
@@ -278,6 +310,7 @@ module HydraDAM
         end
       end
       class BarcodeReader < XmlReader
+        attr_reader :md5sums_map, :md5events_map
         WORK_ATT_LOOKUPS = {
           mdpi_date: '/IU/Carrier/Parts/Part/Ingest/Date',
           part: '/IU/Carrier/Parts/Part/@Side',
@@ -312,6 +345,14 @@ module HydraDAM
           result[:mdpi_date] = DateTime.parse(result[:mdpi_date].first)
           result[:total_parts] = xml.xpath('count(//Part)').to_i
           result
+        end
+
+        def parse
+          @md5sums_map = {}
+          xml.xpath('//Files/File').each do |file|
+            @md5sums_map[file.xpath('FileName').first.text.to_s] = file.xpath('CheckSum').first.text.to_s
+          end
+          @md5events_map = md5sums_map_to_events(md5sums_map)
         end
       end
       
@@ -433,29 +474,15 @@ module HydraDAM
           parse
         end
       end
-  
+
       class Md5Reader < TextReader
-        attr_reader :md5sums_map
+        attr_reader :md5sums_map, :md5events_map
         def type
           :md5
         end
-        def md5events_map
-          @md5events_map ||= begin
-            foo = {}
-          @md5sums_map.keys.each do |filename|
-            digest_atts = {}
-            digest_atts[:premis_event_type] = ['mes']
-            digest_atts[:premis_agent] = ['mailto:mdpi@iu.edu']
-            digest_atts[:premis_event_date_time] = Array.wrap(File.mtime(id))
-            digest_atts[:premis_event_detail] = ['Program used: python, hashlib.sha256()']
-            digest_atts[:premis_event_outcome] = [@md5sums_map[filename]]
-            foo[filename] = { attributes: digest_atts }
-          end
-            foo
-          end
-        end
         def parse
           @md5sums_map = source.split("\n").map { |line| line.split(/\s+/).reverse }.map { |pair| pair[0] = pair[0].sub(/.*\//, ''); pair }.to_h
+          @md5events_map ||= md5sums_map_to_events(@md5sums_map, agent: 'store-admin@iu.edu')
         end
       end
     end
