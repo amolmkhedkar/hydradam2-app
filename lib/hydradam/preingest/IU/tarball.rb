@@ -67,6 +67,7 @@ module HydraDAM
             elsif file_reader.type.in? [:purl, :md5]
               @purls_map = file_reader.reader.purls_map if file_reader.type == :purl
               @md5sums_map = file_reader.reader.md5sums_map if file_reader.type == :md5
+              @md5events_map = file_reader.reader.md5events_map if file_reader.type == :md5
               file_set[:files] = file_reader.files
             else
               file_set[:attributes] = file_set_ai.raw_attributes
@@ -87,6 +88,10 @@ module HydraDAM
   
         def postprocess
           @file_sets.each do |file_set|
+            if @md5events_map && @md5events_map[file_set[:filename]]
+              file_set[:events] ||= []
+              file_set[:events] << @md5events_map[file_set[:filename]]
+            end
             if file_set[:files].present?
               file_set[:files].each do |file|
                 if file[:filename]
@@ -378,29 +383,20 @@ module HydraDAM
 
         def events
           results = []
-          attributes = {}
-          attributes[:premis_event_type] = ['val']
-          attributes[:premis_agent] = ['mailto:' + User.first&.email]
-          attributes[:premis_event_date_time] = Array.wrap(File.mtime(id))          
-          attributes[:premis_event_detail] = ['FFprobe multimedia streams analyzer from FFmpeg']
-          attributes[:premis_event_outcome] = ['PASS']
-          results << { attributes: attributes }
-          attributes = {}
-          attributes[:premis_event_type] = ['cre']
-          attributes[:premis_agent] = ['mailto:' + User.first&.email]
-          attributes[:premis_event_date_time] = Array.wrap(File.mtime(id))
+          val_atts = {}
+          val_atts[:premis_event_type] = ['val']
+          val_atts[:premis_agent] = ['mailto:' + User.first&.email.to_s]
+          val_atts[:premis_event_date_time] = Array.wrap(File.mtime(id))          
+          val_atts[:premis_event_detail] = ['FFprobe multimedia streams analyzer from FFmpeg']
+          val_atts[:premis_event_outcome] = ['PASS']
+          results << { attributes: val_atts }
+          cre_atts = {}
+          cre_atts[:premis_event_type] = ['cre']
+          cre_atts[:premis_agent] = ['mailto:' + User.first&.email]
+          cre_atts[:premis_event_date_time] = Array.wrap(File.mtime(id))
           # FIXME
 	  # attributes[:premis_event_detail] = ['FFprobe multimedia streams analyzer from FFmpeg']
-          results << { attributes: attributes }
-	  attributes = {}
-          attributes[:premis_event_type] = ['mes']
-          attributes[:premis_agent] = ['mailto:' + User.first&.email]
-          attributes[:premis_event_date_time] = Array.wrap(File.mtime(id))
-	  # attributes[:premis_event_detail] = ['FFprobe multimedia streams analyzer from FFmpeg']
-	  # FIXME: add :premis_event_outcome for this event
-	  # FIXME
-	  # attributes[:premis_event_outcome] = Array.wrap(File.checksum)
-          results << { attributes: attributes }
+	  results << { attributes: cre_atts }
           results
         end
       end
@@ -442,6 +438,21 @@ module HydraDAM
         attr_reader :md5sums_map
         def type
           :md5
+        end
+        def md5events_map
+          @md5events_map ||= begin
+            foo = {}
+          @md5sums_map.keys.each do |filename|
+            digest_atts = {}
+            digest_atts[:premis_event_type] = ['mes']
+            digest_atts[:premis_agent] = ['mailto:mdpi@iu.edu']
+            digest_atts[:premis_event_date_time] = Array.wrap(File.mtime(id))
+            digest_atts[:premis_event_detail] = ['Program used: python, hashlib.sha256()']
+            digest_atts[:premis_event_outcome] = [@md5sums_map[filename]]
+            foo[filename] = { attributes: digest_atts }
+          end
+            foo
+          end
         end
         def parse
           @md5sums_map = source.split("\n").map { |line| line.split(/\s+/).reverse }.map { |pair| pair[0] = pair[0].sub(/.*\//, ''); pair }.to_h
