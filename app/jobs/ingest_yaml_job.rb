@@ -48,13 +48,14 @@ class IngestYAMLJob < ActiveJob::Base
         logger.info "Ingesting FileSet #{f[:path]}"
         file_set = FileSet.new
         file_set.attributes = f[:attributes]
+        file_set.apply_depositor_metadata(@user)
+        file_set.save!
         actor = FileSetActor.new(file_set, @user)
-        # FIXME: handle all files, not just first, and set proper relations (not just original_file)
-        if f[:files].any?
-          file = f[:files].first
+        f[:files].each_with_index do |file, i|
           logger.info "FileSet #{file_set.id}: ingesting file: #{file[:filename]}"
-          actor.create_metadata(resource, file[:file_opts])
-          actor.create_content(decorated_file(file))
+          actor.create_metadata(resource, file[:file_opts]) if i.zero? && file[:path]
+          actor.create_content(decorated_file(file), file[:use]) if file[:path] #FIXME: handle purl case
+
         end
         if f[:events].present? 
           f[:events].each do |event|

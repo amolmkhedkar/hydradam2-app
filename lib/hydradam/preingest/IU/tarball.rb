@@ -185,11 +185,11 @@ module HydraDAM
             path: id,
             filename: id.to_s.sub(/.*\//, ''),
             file_opts: {},
-            use: use
+            use: use(filename).to_s
           }
         end
 
-        def use
+        def use(_file_name_pattern)
           :original_file
         end
 
@@ -338,12 +338,12 @@ module HydraDAM
           { mime_type: mimetype(media_filename),
             filename: media_filename,
             file_opts: {},
-            use: use(media_filename)
+            use: use(media_filename).to_s
           }
         end
 
-        def use(arg = nil)
-          case arg || filename
+        def use(file_name_pattern)
+          case file_name_pattern
           when /_ffprobe/
             :extracted_text
           when /_access/
@@ -353,13 +353,13 @@ module HydraDAM
           when /_prod/
             :intermediate_file
           else
-            filename
+            :original_file
           end
         end
 
         # FIXME: determine mimetype from codec, instead?
-        def mimetype(arg = nil)
-          case arg || filename
+        def mimetype(file_name_pattern)
+          case file_name_pattern
           when /mp4$/
             'video/mp4'
           when /wav$/
@@ -380,7 +380,6 @@ module HydraDAM
           attributes = {}
           attributes[:premis_event_type] = ['val']
           attributes[:premis_agent] = ['mailto:' + User.first&.email]
-          # FIXME: Minitar's unpack does not allow --atime-preserve argument, to maintain timestamps
           attributes[:premis_event_date_time] = Array.wrap(File.mtime(id))          
           attributes[:premis_event_detail] = ['FFprobe multimedia streams analyzer from FFmpeg']
           attributes[:premis_event_outcome] = ['PASS']
@@ -389,6 +388,7 @@ module HydraDAM
           attributes[:premis_event_type] = ['cre']
           attributes[:premis_agent] = ['mailto:' + User.first&.email]
           attributes[:premis_event_date_time] = Array.wrap(File.mtime(id))
+          # FIXME
 	  # attributes[:premis_event_detail] = ['FFprobe multimedia streams analyzer from FFmpeg']
           results << { attributes: attributes }
 	  attributes = {}
@@ -397,6 +397,7 @@ module HydraDAM
           attributes[:premis_event_date_time] = Array.wrap(File.mtime(id))
 	  # attributes[:premis_event_detail] = ['FFprobe multimedia streams analyzer from FFmpeg']
 	  # FIXME: add :premis_event_outcome for this event
+	  # FIXME
 	  # attributes[:premis_event_outcome] = Array.wrap(File.checksum)
           results << { attributes: attributes }
           results
